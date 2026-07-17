@@ -1,475 +1,163 @@
 {
-    "definition": {
-        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
-        "contentVersion": "1.0.0.0",
-        "triggers": {
-            "Atlassian_guard_webhook": {
-                "type": "Request",
-                "kind": "Http",
-                "inputs": {
-                    "method": "POST"
-                },
-                "runtimeConfiguration": {
-                    "secureData": {
-                        "properties": [
-                            "inputs",
-                            "outputs"
-                        ]
-                    }
-                }
-            }
-        },
-        "actions": {
-            "Initialize_variables": {
-                "runAfter": {},
-                "type": "InitializeVariable",
-                "inputs": {
-                    "variables": [
-                        {
-                            "name": "DCELogsIngestionURL",
-                            "type": "string",
-                            "value": "https://YOUR-DCE-ENDPOINT.norwayeast-1.ingest.monitor.azure.com"
-                        },
-                        {
-                            "name": "TableName",
-                            "type": "string",
-                            "value": "atlassian_guard_detect_CL"
-                        },
-                        {
-                            "name": "DCRImmutableID",
-                            "type": "string",
-                            "value": "dcr-YOUR-DCR-IMMUTABLE-ID"
-                        }
-                    ]
-                }
-            },
-            "Get_secret": {
-                "runAfter": {
-                    "Initialize_variables": [
-                        "Succeeded"
-                    ]
-                },
-                "type": "ApiConnection",
-                "inputs": {
-                    "host": {
-                        "connection": {
-                            "name": "@parameters('$connections')['keyvault']['connectionId']"
-                        }
-                    },
-                    "method": "get",
-                    "path": "/secrets/@{encodeURIComponent('Atlassian-Guard-Detect-Webhook')}/value",
-                    "retryPolicy": {
-                        "type": "exponential",
-                        "count": 4,
-                        "interval": "PT10S",
-                        "minimumInterval": "PT5S",
-                        "maximumInterval": "PT1H"
-                    }
-                },
-                "runtimeConfiguration": {
-                    "secureData": {
-                        "properties": [
-                            "inputs",
-                            "outputs"
-                        ]
-                    }
-                }
-            },
-            "Check_Webhook_Token": {
-                "actions": {
-                    "Parse_JSON": {
-                        "type": "ParseJson",
-                        "inputs": {
-                            "content": "@triggerBody()",
-                            "schema": {
-                                "type": "object",
-                                "properties": {
-                                    "alertDetailURL": {
-                                        "type": "string"
-                                    },
-                                    "alertId": {
-                                        "type": "string"
-                                    },
-                                    "alertTitle": {
-                                        "type": "string"
-                                    },
-                                    "detectionTime": {
-                                        "type": "integer"
-                                    },
-                                    "activity": {
-                                        "type": "object",
-                                        "properties": {
-                                            "action": {
-                                                "type": "string"
-                                            },
-                                            "subject": {
-                                                "type": "object",
-                                                "properties": {
-                                                    "ari": {
-                                                        "type": "string"
-                                                    },
-                                                    "containerAri": {
-                                                        "type": "string"
-                                                    },
-                                                    "ati": {
-                                                        "type": "string"
-                                                    }
-                                                }
-                                            },
-                                            "time": {
-                                                "type": "object",
-                                                "properties": {
-                                                    "start": {
-                                                        "type": "string"
-                                                    },
-                                                    "end": {
-                                                        "type": "string"
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    },
-                                    "actor": {
-                                        "type": "object",
-                                        "properties": {
-                                            "accountId": {
-                                                "type": "string"
-                                            },
-                                            "name": {
-                                                "type": "string"
-                                            },
-                                            "sessions": {
-                                                "type": "array",
-                                                "items": {
-                                                    "type": "object",
-                                                    "properties": {
-                                                        "ipAddress": {
-                                                            "type": "string"
-                                                        },
-                                                        "userAgent": {
-                                                            "type": "string"
-                                                        },
-                                                        "loginTime": {
-                                                            "type": "string"
-                                                        },
-                                                        "lastActiveTime": {
-                                                            "type": "string"
-                                                        }
-                                                    },
-                                                    "required": [
-                                                        "ipAddress",
-                                                        "userAgent",
-                                                        "loginTime",
-                                                        "lastActiveTime"
-                                                    ]
-                                                }
-                                            },
-                                            "url": {
-                                                "type": "string"
-                                            }
-                                        }
-                                    },
-                                    "alert": {
-                                        "type": "object",
-                                        "properties": {
-                                            "created": {
-                                                "type": "string"
-                                            },
-                                            "id": {
-                                                "type": "string"
-                                            },
-                                            "product": {
-                                                "type": "string"
-                                            },
-                                            "site": {
-                                                "type": "string"
-                                            },
-                                            "title": {
-                                                "type": "string"
-                                            },
-                                            "url": {
-                                                "type": "string"
-                                            }
-                                        }
-                                    },
-                                    "id": {
-                                        "type": "string"
-                                    },
-                                    "timestamp": {
-                                        "type": "integer"
-                                    },
-                                    "type": {
-                                        "type": "string"
-                                    },
-                                    "workspace": {
-                                        "type": "object",
-                                        "properties": {
-                                            "cloudId": {
-                                                "type": "string"
-                                            },
-                                            "id": {
-                                                "type": "string"
-                                            },
-                                            "orgId": {
-                                                "type": "string"
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "Validate_Required_Fields": {
-                        "actions": {
-                            "Compose": {
-                                "type": "Compose",
-                                "inputs": [
-                                    {
-                                        "TimeGenerated": "@body('Parse_JSON')?['alert']?['created']",
-                                        "AlertId": "@body('Parse_JSON')?['alertId']",
-                                        "AlertTitle": "@body('Parse_JSON')?['alertTitle']",
-                                        "AlertDetailURL": "@body('Parse_JSON')?['alertDetailURL']",
-                                        "DetectionTime": "@body('Parse_JSON')?['detectionTime']",
-                                        "ActivityAction": "@body('Parse_JSON')?['activity']?['action']",
-                                        "ActivitySubjectAri": "@body('Parse_JSON')?['activity']?['subject']?['ari']",
-                                        "ActivitySubjectContainerAri": "@body('Parse_JSON')?['activity']?['subject']?['containerAri']",
-                                        "ActivitySubjectAti": "@body('Parse_JSON')?['activity']?['subject']?['ati']",
-                                        "ActivityTimeStart": "@body('Parse_JSON')?['activity']?['time']?['start']",
-                                        "ActivityTimeEnd": "@body('Parse_JSON')?['activity']?['time']?['end']",
-                                        "ActorAccountId": "@body('Parse_JSON')?['actor']?['accountId']",
-                                        "ActorName": "@body('Parse_JSON')?['actor']?['name']",
-                                        "ActorUrl": "@body('Parse_JSON')?['actor']?['url']",
-                                        "ActorSessions": "@body('Parse_JSON')?['actor']?['sessions']",
-                                        "AlertProduct": "@body('Parse_JSON')?['alert']?['product']",
-                                        "AlertSite": "@body('Parse_JSON')?['alert']?['site']",
-                                        "AlertUrl": "@body('Parse_JSON')?['alert']?['url']",
-                                        "EventId": "@body('Parse_JSON')?['id']",
-                                        "EventType": "@body('Parse_JSON')?['type']",
-                                        "Timestamp": "@body('Parse_JSON')?['timestamp']",
-                                        "WorkspaceCloudId": "@body('Parse_JSON')?['workspace']?['cloudId']",
-                                        "WorkspaceId": "@body('Parse_JSON')?['workspace']?['id']",
-                                        "WorkspaceOrgId": "@body('Parse_JSON')?['workspace']?['orgId']"
-                                    }
-                                ]
-                            },
-                            "Send_to_DCE": {
-                                "runAfter": {
-                                    "Compose": [
-                                        "Succeeded"
-                                    ]
-                                },
-                                "type": "Http",
-                                "inputs": {
-                                    "uri": "@{variables('DCELogsIngestionURL')}/dataCollectionRules/@{variables('DCRImmutableID')}/streams/Custom-@{variables('TableName')}?api-version=2023-01-01",
-                                    "method": "POST",
-                                    "headers": {
-                                        "Content-Type": "application/json"
-                                    },
-                                    "body": "@outputs('Compose')",
-                                    "authentication": {
-                                        "type": "ManagedServiceIdentity",
-                                        "audience": "https://monitor.azure.com"
-                                    },
-                                    "retryPolicy": {
-                                        "type": "exponential",
-                                        "count": 4,
-                                        "interval": "PT20S",
-                                        "minimumInterval": "PT10S",
-                                        "maximumInterval": "PT1H"
-                                    }
-                                },
-                                "runtimeConfiguration": {
-                                    "contentTransfer": {
-                                        "transferMode": "Chunked"
-                                    }
-                                }
-                            },
-                            "Check_DCE_Response": {
-                                "actions": {
-                                    "Terminate_Success": {
-                                        "type": "Terminate",
-                                        "inputs": {
-                                            "runStatus": "Succeeded"
-                                        }
-                                    }
-                                },
-                                "runAfter": {
-                                    "Send_to_DCE": [
-                                        "Succeeded",
-                                        "Failed",
-                                        "TimedOut"
-                                    ]
-                                },
-                                "else": {
-                                    "actions": {
-                                        "Terminate_DCE_Failed": {
-                                            "type": "Terminate",
-                                            "inputs": {
-                                                "runStatus": "Failed",
-                                                "runError": {
-                                                    "code": "@{outputs('Send_to_DCE')['statusCode']}",
-                                                    "message": "Failed to send data to DCE: @{outputs('Send_to_DCE')['body']}"
-                                                }
-                                            }
-                                        }
-                                    }
-                                },
-                                "expression": {
-                                    "or": [
-                                        {
-                                            "equals": [
-                                                "@outputs('Send_to_DCE')['statusCode']",
-                                                200
-                                            ]
-                                        },
-                                        {
-                                            "equals": [
-                                                "@outputs('Send_to_DCE')['statusCode']",
-                                                204
-                                            ]
-                                        }
-                                    ]
-                                },
-                                "type": "If"
-                            }
-                        },
-                        "runAfter": {
-                            "Parse_JSON": [
-                                "Succeeded"
-                            ]
-                        },
-                        "else": {
-                            "actions": {
-                                "Terminate_Invalid_Data": {
-                                    "type": "Terminate",
-                                    "inputs": {
-                                        "runStatus": "Failed",
-                                        "runError": {
-                                            "code": "400",
-                                            "message": "Missing required fields in webhook payload"
-                                        }
-                                    }
-                                }
-                            }
-                        },
-                        "expression": {
-                            "and": [
-                                {
-                                    "not": {
-                                        "equals": [
-                                            "@body('Parse_JSON')?['alertId']",
-                                            "@null"
-                                        ]
-                                    }
-                                },
-                                {
-                                    "not": {
-                                        "equals": [
-                                            "@body('Parse_JSON')?['alert']?['created']",
-                                            "@null"
-                                        ]
-                                    }
-                                }
-                            ]
-                        },
-                        "type": "If"
-                    },
-                    "Handle_Parse_Error": {
-                        "runAfter": {
-                            "Parse_JSON": [
-                                "Failed",
-                                "TimedOut"
-                            ]
-                        },
-                        "type": "Terminate",
-                        "inputs": {
-                            "runStatus": "Failed",
-                            "runError": {
-                                "code": "400",
-                                "message": "Failed to parse webhook JSON: @{body('Parse_JSON')}"
-                            }
-                        }
-                    }
-                },
-                "runAfter": {
-                    "Get_secret": [
-                        "Succeeded"
-                    ]
-                },
-                "else": {
-                    "actions": {
-                        "Terminate_Unauthorized": {
-                            "type": "Terminate",
-                            "inputs": {
-                                "runStatus": "Failed",
-                                "runError": {
-                                    "code": "401",
-                                    "message": "Unauthorized: Invalid or missing X-Automation-Webhook-Token header"
-                                }
-                            }
-                        }
-                    }
-                },
-                "expression": {
-                    "and": [
-                        {
-                            "not": {
-                                "equals": [
-                                    "@body('Get_secret')?['value']",
-                                    "@null"
-                                ]
-                            }
-                        },
-                        {
-                            "equals": [
-                                "@triggerOutputs()?['headers']?['X-Automation-Webhook-Token']",
-                                "@body('Get_secret')?['value']"
-                            ]
-                        }
-                    ]
-                },
-                "type": "If"
-            },
-            "Handle_Secret_Retrieval_Error": {
-                "runAfter": {
-                    "Get_secret": [
-                        "Failed",
-                        "TimedOut"
-                    ]
-                },
-                "type": "Terminate",
-                "inputs": {
-                    "runStatus": "Failed",
-                    "runError": {
-                        "code": "500",
-                        "message": "Failed to retrieve webhook token from Key Vault"
-                    }
-                }
-            }
-        },
-        "outputs": {},
-        "parameters": {
-            "$connections": {
-                "type": "Object",
-                "defaultValue": {}
-            }
+  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {},
+  "triggers": {
+    "Atlassian_guard_webhook": {
+      "type": "Request",
+      "kind": "Http",
+      "inputs": {
+        "method": "POST",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "alertId": { "type": "string" },
+            "alertTitle": { "type": "string" },
+            "alertDetailURL": { "type": "string" },
+            "detectionTime": { "type": "integer" },
+            "activity": { "type": "object" },
+            "actor": { "type": "object" },
+            "alert": { "type": "object" },
+            "id": { "type": "string" },
+            "timestamp": { "type": "integer" },
+            "type": { "type": "string" },
+            "workspace": { "type": "object" }
+          }
         }
-    },
-    "parameters": {
-        "$connections": {
-            "type": "Object",
-            "value": {
-                "keyvault": {
-                    "id": "/subscriptions/YOUR_SUBSCRIPTION_ID/providers/Microsoft.Web/locations/YOUR_REGION/managedApis/keyvault",
-                    "connectionId": "/subscriptions/YOUR_SUBSCRIPTION_ID/resourceGroups/YOUR_RESOURCE_GROUP/providers/Microsoft.Web/connections/keyvault",
-                    "connectionName": "keyvault",
-                    "connectionProperties": {
-                        "authentication": {
-                            "type": "ManagedServiceIdentity"
-                        }
-                    }
-                }
-            }
-        }
+      }
     }
+  },
+  "actions": {
+    "Initialize_DCELogsIngestionURL": {
+      "type": "InitializeVariable",
+      "inputs": {
+        "variables": [
+          {
+            "name": "DCELogsIngestionURL",
+            "type": "string",
+            "value": "${DCE_URL}"
+          }
+        ]
+      }
+    },
+    "Initialize_DCRImmutableID": {
+      "type": "InitializeVariable",
+      "runAfter": {
+        "Initialize_DCELogsIngestionURL": ["Succeeded"]
+      },
+      "inputs": {
+        "variables": [
+          {
+            "name": "DCRImmutableID",
+            "type": "string",
+            "value": "${DCR_IMMUTABLE_ID}"
+          }
+        ]
+      }
+    },
+    "Initialize_StreamName": {
+      "type": "InitializeVariable",
+      "runAfter": {
+        "Initialize_DCRImmutableID": ["Succeeded"]
+      },
+      "inputs": {
+        "variables": [
+          {
+            "name": "StreamName",
+            "type": "string",
+            "value": "Custom-atlassian_guard_detect_CL"
+          }
+        ]
+      }
+    },
+    "Get_Atlassian_Webhook_Token": {
+      "type": "Http",
+      "runAfter": {
+        "Initialize_StreamName": ["Succeeded"]
+      },
+      "inputs": {
+        "method": "GET",
+        "uri": "https://${KV}.vault.azure.net/secrets/${WEBHOOK_SECRET_NAME}?api-version=7.4",
+        "authentication": {
+          "type": "ManagedServiceIdentity",
+          "audience": "https://vault.azure.net"
+        }
+      }
+    },
+    "Validate_webhook_token": {
+      "type": "If",
+      "runAfter": {
+        "Get_Atlassian_Webhook_Token": ["Succeeded"]
+      },
+      "expression": "@equals(coalesce(triggerOutputs()?['headers']?['X-Automation-Webhook-Token'], triggerOutputs()?['headers']?['x-automation-webhook-token']), body('Get_Atlassian_Webhook_Token')?['value'])",
+      "actions": {
+        "Build_records_array": {
+          "type": "Compose",
+          "inputs": [
+            {
+              "TimeGenerated": "@utcNow()",
+              "AlertId": "@triggerBody()?['alertId']",
+              "AlertTitle": "@triggerBody()?['alertTitle']",
+              "AlertDetailURL": "@triggerBody()?['alertDetailURL']",
+              "DetectionTime": "@triggerBody()?['detectionTime']",
+              "ActivityAction": "@triggerBody()?['activity']?['action']",
+              "ActorAccountId": "@triggerBody()?['actor']?['accountId']",
+              "ActorName": "@triggerBody()?['actor']?['name']",
+              "ActorSessions": "@triggerBody()?['actor']?['sessions']",
+              "AlertProduct": "@triggerBody()?['alert']?['product']",
+              "AlertSite": "@triggerBody()?['alert']?['site']",
+              "AlertUrl": "@triggerBody()?['alert']?['url']",
+              "EventId": "@triggerBody()?['id']",
+              "EventType": "@triggerBody()?['type']",
+              "Timestamp": "@triggerBody()?['timestamp']",
+              "WorkspaceId": "@triggerBody()?['workspace']?['id']"
+            }
+          ]
+        },
+        "Send_to_Azure_Monitor": {
+          "type": "Http",
+          "runAfter": {
+            "Build_records_array": ["Succeeded"]
+          },
+          "inputs": {
+            "method": "POST",
+            "uri": "@concat(variables('DCELogsIngestionURL'), '/dataCollectionRules/', variables('DCRImmutableID'), '/streams/', variables('StreamName'), '?api-version=2023-01-01')",
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "body": "@outputs('Build_records_array')",
+            "authentication": {
+              "type": "ManagedServiceIdentity",
+              "audience": "https://monitor.azure.com"
+            }
+          }
+        },
+        "Success_Response": {
+          "type": "Response",
+          "kind": "Http",
+          "runAfter": {
+            "Send_to_Azure_Monitor": ["Succeeded"]
+          },
+          "inputs": {
+            "statusCode": 200,
+            "body": "OK"
+          }
+        }
+      },
+      "else": {
+        "actions": {
+          "Unauthorized_Response": {
+            "type": "Response",
+            "kind": "Http",
+            "inputs": {
+              "statusCode": 401,
+              "body": {
+                "error": "Unauthorized"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
 }
